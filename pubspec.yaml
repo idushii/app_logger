@@ -18,12 +18,6 @@ dependencies:
   shared_preferences: ^2.0.6
   http: ^0.13.3
 
-  check_key_app:
-  #  path: ../check_key_app
-    git:
-      url: https://gitlab.com/nic.ilinov/check_key_app.git
-      ref: ae38bb4218b1b3926c6e749f576882ef6c3d1dab
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
