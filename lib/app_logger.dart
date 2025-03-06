@@ -112,8 +112,7 @@ class AppLogger {
         ? (await DeviceInfoPlugin().androidInfo).isPhysicalDevice == false
         : (await DeviceInfoPlugin().iosInfo).isPhysicalDevice == false;
 
-    final bool canConnect =
-        hasConnect == true || (hasConnect == null && (await CheckKeyApp.isAppInstalled == true)) || isEmulator;
+    final bool canConnect = hasConnect == true || isEmulator;
 
     if (canConnect) {
       print('[Logger] init, session $sessionId');
