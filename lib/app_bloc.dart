@@ -18,7 +18,7 @@ extension AppBloc on AppLogger {
       this.messagesStream.sink.add(Message('onCreate', blocs));
     } catch (err) {
       if (!AppLogger().hideErrorBlocSerialize) {
-        debugPrint(err);
+        debugPrint(err.toString());
       }
     }
   }

@@ -13,10 +13,10 @@ Future<DeviceInfo?> getDeviceDetails({
     if (Platform.isAndroid) {
       var build = await deviceInfoPlugin.androidInfo;
       res = DeviceInfo(
-        build.androidId,
+        build.id,
         build.model,
         build.version.toString(),
-        build.androidId, //UUID for Androi,
+        build.id, //UUID for Androi,
         build.product,
         project,
         session,
