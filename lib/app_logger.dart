@@ -7,29 +7,36 @@ import 'dart:io';
 import 'package:app_logger/models/request_payload.dart';
 import 'package:app_logger/utils/generate_random_string.dart';
 import 'package:bloc/bloc.dart';
-import 'package:check_key_app/check_key_app.dart';
 import 'package:device_info/device_info.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as Http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web_socket_channel/io.dart';
+
+part 'app_bloc.dart';
 
 part 'app_logger_bloc_observer.dart';
+
 part 'logger_http.dart';
+
 part 'logger_interceptor.dart';
+
 part 'models/bloc/bloc_record.dart';
+
 part 'models/bloc/bloc_state_diff.dart';
+
 part 'models/device_info.dart';
+
 part 'models/message.dart';
+
 part 'utils/curl.dart';
-part 'app_bloc.dart';
+
 part 'utils/get_device_details.dart';
 
 class AppLogger {
   static final AppLogger _singleton = AppLogger._internal();
-  String path;
+  String? path;
 
   bool isCreated = false;
 
@@ -39,22 +46,26 @@ class AppLogger {
 
   AppLogger._internal();
 
-  DeviceInfo deviceInfo;
+  DeviceInfo? deviceInfo;
   int sessionId = 0;
-  IOWebSocketChannel channel;
-  WebSocketChannelState _state = WebSocketChannelState.connecting;
   String loggerUrl = '';
-  String baseUrl = '';
+  String? baseUrl = '';
   String install = '';
-  String project;
+  String? project;
   StreamController<Message> messagesStream = new StreamController();
   bool hideErrorBlocSerialize = true;
   bool hasConnect = false;
-  SharedPreferences prefs;
+  late SharedPreferences prefs;
+  late Options httpOptions;
+  DateTime lastSend = DateTime.now();
+  int durationSend = 1;
 
   List<Message> messages = <Message>[];
 
   create() {
+    if (messagesStream.isClosed) {
+      messagesStream = new StreamController();
+    }
     if (!isCreated) {
       messagesStream.stream.listen((event) async {
         if (deviceInfo == null) {
@@ -66,21 +77,28 @@ class AppLogger {
           );
         }
 
-        if (hasConnect) {
-          sendMessage(event);
-        } else {
-          messages.add(event);
-        }
+        messages.add(event);
       });
       isCreated = true;
     }
+
+    Timer.periodic(Duration(seconds: durationSend), (timer) {
+      if (hasConnect) {
+        if (messages.isNotEmpty) {
+          sendMessage([...messages]);
+          messages.clear();
+        }
+      }
+    });
   }
 
-  init(String loggerUrl, String project, {bool hasConnect, String baseUrl, bool hideErrorBlocSerialize}) async {
+  init(String loggerUrl, String project, {bool? hasConnect, String? baseUrl, bool? hideErrorBlocSerialize, int? durationSend})
+  async {
     this.loggerUrl = loggerUrl;
     this.project = project;
     this.baseUrl = baseUrl;
     this.hideErrorBlocSerialize = hideErrorBlocSerialize ?? this.hideErrorBlocSerialize;
+    this.durationSend = durationSend ?? this.durationSend;
 
     prefs = await SharedPreferences.getInstance();
     this.install = prefs.getString('install') ?? generateRandomString(20);
@@ -102,10 +120,11 @@ class AppLogger {
         install: install,
       );
     } else {
-      deviceInfo = deviceInfo.update(
+      deviceInfo = deviceInfo!.copyWith(
         project: project,
         session: sessionId,
         baseUrl: baseUrl,
+        install: install,
       );
     }
 
@@ -113,84 +132,67 @@ class AppLogger {
         ? (await DeviceInfoPlugin().androidInfo).isPhysicalDevice == false
         : (await DeviceInfoPlugin().iosInfo).isPhysicalDevice == false;
 
-    final bool canConnect =
-        hasConnect == true || (hasConnect == null && (await CheckKeyApp.isAppInstalled == true)) || isEmulator;
+    final bool canConnect = hasConnect == true || isEmulator;
 
     if (canConnect) {
       print('[Logger] init, session $sessionId');
 
-      if (this.channel != null && this._state != WebSocketChannelState.closed) {
-        dispose();
-      }
-
-      _doConnect();
       this.hasConnect = true;
+
+      httpOptions = Options(headers: {'install': install, 'project': project, 'sessionId': sessionId});
 
       messages.add(Message('device_connect', deviceInfo));
 
       if (messages.isNotEmpty) {
-        messages.forEach((element) {
-          sendMessage(element);
-        });
+        sendMessage([...messages]);
+        messages.clear();
       }
     } else {
       print('[Logger] init, no connect remote, session $sessionId');
     }
   }
 
-  void _doConnect() {
-    if (this.channel != null && this._state != WebSocketChannelState.closed) {
-      dispose();
+  sendMessage(List<Message> messages) async {
+    try {
+      var payload = [];
+
+      messages.forEach((element) {
+        try {
+          jsonEncode(element.payload);
+          payload.add(element);
+        } catch(e) {
+          print('Не могу отправить в логгер сообщение');
+          print(e);
+        }
+      });
+
+      await Dio().post(loggerUrl + '/request', data: jsonEncode(payload), options: httpOptions);
+    } catch (e) {
+      debugPrint(e.toString());
     }
-
-    this.channel = IOWebSocketChannel.connect(loggerUrl, pingInterval: Duration(seconds: 1));
-
-    _state = WebSocketChannelState.connecting;
-
-    this.channel.stream.listen(onReceiveData, onDone: onClosed, onError: onError, cancelOnError: false);
-  }
-
-  void onReceiveData(data) {
-    print("ReceiveData: $data");
-  }
-
-  void onClosed() {
-    print("websocket close");
-    new Future.delayed(Duration(seconds: 1), () {
-      print("websocket restore connect");
-      _doConnect();
-    });
-  }
-
-  void onError(err, StackTrace stackTrace) {
-    print("websocket 出错:" + err.toString());
-    if (stackTrace != null) {
-      print(stackTrace);
-    }
-  }
-
-  sendMessage(Message message) {
-    channel.sink.add(jsonEncode(message.toJson()));
   }
 
   List<BlocRecord> blocs = [];
 
   log(String message) {
-    create();
-    this.messagesStream.sink.add(Message('device_log', message));
+    try {
+      create();
+      this.messagesStream.sink.add(Message('device_log', message));
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+  }
+
+  refreshCache(Map<String, dynamic> cache) {
+    try {
+      create();
+      this.messagesStream.sink.add(Message('cache', cache));
+    } catch (e) {
+      debugPrint(e.toString());
+    }
   }
 
   dispose() {
-    create();
-
-    this.channel.sink.close();
-    this._state = WebSocketChannelState.closed;
-
-    messagesStream?.close();
+    messagesStream.close();
   }
-}
-
-enum WebSocketChannelState {
-  connecting,
-  closed,
 }

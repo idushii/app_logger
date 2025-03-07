@@ -1,10 +1,10 @@
 part of app_logger;
 
-Future<DeviceInfo> getDeviceDetails({
-  @required String baseUrl,
-  @required String project,
-  @required String install,
-  @required int session,
+Future<DeviceInfo?> getDeviceDetails({
+  required String? baseUrl,
+  required String? project,
+  required String install,
+  required int session,
 }) async {
   final DeviceInfoPlugin deviceInfoPlugin = new DeviceInfoPlugin();
   var res;
@@ -15,7 +15,7 @@ Future<DeviceInfo> getDeviceDetails({
       res = DeviceInfo(
         build.androidId,
         build.model,
-        build.version.toString(),
+        "${build.version.release} ${build.version.sdkInt} ${build.version.codename} ${build.version.incremental}",
         build.androidId, //UUID for Androi,
         build.product,
         project,

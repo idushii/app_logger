@@ -1,5 +1,4 @@
 import 'package:app_logger/app_logger.dart';
-import 'package:flutter/cupertino.dart';
 
 class RequestPayload {
   final number;
@@ -17,27 +16,27 @@ class RequestPayload {
   final responseAt;
   final curl;
   final size;
-  final String baseUrl;
+  final String? baseUrl;
   final String install;
 
   RequestPayload({
-    @required this.number,
-    @required this.url,
-    @required this.code,
-    @required this.method,
-    @required this.status,
-    @required this.statusCode,
-    @required this.headers,
-    @required this.headersResponse,
-    @required this.params,
-    @required this.payload,
-    @required this.action,
-    @required this.createdAt,
-    @required this.responseAt,
-    @required this.curl,
-    @required this.size,
-    @required this.baseUrl,
-    @required this.install,
+    required this.number,
+    required this.url,
+    required this.code,
+    required this.method,
+    required this.status,
+    required this.statusCode,
+    required this.headers,
+    required this.headersResponse,
+    required this.params,
+    required this.payload,
+    required this.action,
+    required this.createdAt,
+    required this.responseAt,
+    required this.curl,
+    required this.size,
+    required this.baseUrl,
+    required this.install,
   });
 
   toJson() => {
